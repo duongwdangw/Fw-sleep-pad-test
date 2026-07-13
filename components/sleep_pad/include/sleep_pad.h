@@ -26,6 +26,7 @@ typedef struct{
     float hardware_enable; //Hardware enable/lock parameter. Do not modify.
 }sleep_pad_parameter_t;
 
+
 typedef enum{
     OUT_OF_BED,
     BODY_MOVEMENT,
@@ -60,5 +61,10 @@ typedef struct{
     int TEMP;
 }sleep_pad_data_minute_report_t;
 
+void sp_set_mode(sleep_pad_mode_t mode);
+void sp_read_uart_data_task(void *pvParameter);
+
+void sp_request_send_data_once_a_second();
+void sp_change_to_idle_mode();
 
 #endif

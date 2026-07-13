@@ -1,6 +1,5 @@
-idf_component_register(SRCS "driver.c"
+idf_component_register(SRCS "drivers.c"
                        INCLUDE_DIRS "include"  
                        REQUIRES 
                         driver
-
                         config_parameter)
