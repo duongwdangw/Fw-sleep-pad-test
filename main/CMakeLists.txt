@@ -1,6 +1,16 @@
-idf_component_register(SRCS "process_manager.c" "main.c"
-                    INCLUDE_DIRS "."
-                    REQUIRES config_parameter
-                             drivers
-                             
-                             sleep_pad)
+idf_component_register(
+    SRCS "main.c" "process_manager.c"
+    INCLUDE_DIRS "."
+    REQUIRES
+        sleep_pad
+        drivers
+        config_parameter
+    PRIV_REQUIRES
+        esp_wifi
+        esp_event
+        esp_netif
+        nvs_flash
+        mqtt
+        json
+        driver
+)
