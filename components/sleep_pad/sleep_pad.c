@@ -189,3 +189,29 @@ void sp_read_uart_data_task(void *pvParameter){
         }
     }
 }
+
+// Ham cau hinh sau tham so noi bo cam bien (Giai quyet sdata bao hoa va loi ap luc nem)
+void sp_set_sensor_sensitivity() {
+    uint8_t cmd[38];
+    // Khoi tao lenh TAOSO= (Dai 6 byte)[cite: 3]
+    memcpy(cmd, "TAOSO=", 6);
+    
+    // Khai bao 8 tham so float. (ESP32 luu float duoi dang little-endian, khop chuan yeu cau)[cite: 3]
+    float params[8] = {
+        35.0f,     // Para 1: Nguong Piezoelectric (mac dinh 35)[cite: 3]
+        10000.0f,  // Para 2: Nguong cu dong (mac dinh 10000)[cite: 3]
+        3000.0f,   // Para 3: TANG LEN 3000 de loai bo trong luong cua dem khong, tranh loi bao "Dang nam"[cite: 3]
+        15.0f,     // Para 4: TANG LEN 15 de giam do khuech dai, chong bao hoa sdata (32767)[cite: 3]
+        4.9f,      // Para 5: Do nhay tho yeu (mac dinh 4.9)[cite: 3]
+        18.5f,     // Para 6: Do nhay ngay (mac dinh 18.5)[cite: 3]
+        3500.0f,   // Para 7: Chua dung[cite: 3]
+        3500.0f    // Para 8: Chua dung[cite: 3]
+    };
+    
+    // Copy 32 byte tham so (8 so float * 4 byte) vao mang lenh[cite: 3]
+    memcpy(&cmd[6], params, 32);
+    
+    // Gui lenh xuong chip cam bien
+    uart_write_bytes(SLEEP_PAD_UART_NUM, cmd, sizeof(cmd));
+    ESP_LOGW(TAG, "Da gui lenh TAOSO= de tinh chinh Para 3 va Para 4");
+}

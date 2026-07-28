@@ -31,6 +31,11 @@ void main_task(void *pvParameter){
     xTaskCreate(sp_data_process_task, "process_data", 1024 * 6, NULL, 5, NULL);
     ESP_LOGI(TAG, "Buoc 4 xong.");
 
+    ESP_LOGI(TAG, "Buoc 4.5: Cau hinh lai nguong ap luc va do nhay cam bien...");
+    sp_set_sensor_sensitivity();
+    vTaskDelay(1000 / portTICK_PERIOD_MS); // Doi 1 giay de chip cam bien luu tham so vao bo nho
+    ESP_LOGI(TAG, "Buoc 4.5 xong.");
+
     // Theo dung tai lieu "UART Hardware Spec V106" muc 4.4: lenh [TAOSG] dua
     // thiet bi vao trang thai lam viec va yeu cau tra ve du lieu moi giay
     // (66 byte, bao gom ca song ap luc tho de tinh sdata/pdata).
