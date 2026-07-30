@@ -213,5 +213,5 @@ void sp_set_sensor_sensitivity() {
     
     // Gui lenh xuong chip cam bien
     uart_write_bytes(SLEEP_PAD_UART_NUM, cmd, sizeof(cmd));
-    ESP_LOGW(TAG, "Da gui lenh TAOSO= de tinh chinh Para 3 va Para 4");
+    //ESP_LOGW(TAG, "Da gui lenh TAOSO= de tinh chinh Para 3 va Para 4");
 }

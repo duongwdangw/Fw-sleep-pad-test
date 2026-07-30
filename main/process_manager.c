@@ -31,30 +31,31 @@ static bool s_ws_connected = false;
 // ============================================================================
 // WiFi
 // ============================================================================
-static void wifi_event_handler(void* arg, esp_event_base_t event_base,
-                                int32_t event_id, void* event_data){
-    if(event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START){
+static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
-    } else if(event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED){
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         ESP_LOGW(TAG, "WiFi mat ket noi, dang thu ket noi lai...");
         xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
         esp_wifi_connect();
-    } else if(event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP){
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ESP_LOGI(TAG, "WiFi da co IP.");
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
     }
 }
 
-void wifi_init_sta(void){
+void wifi_init_sta(void) {
     esp_err_t nvs_ret = nvs_flash_init();
-    if(nvs_ret == ESP_ERR_NVS_NO_FREE_PAGES || nvs_ret == ESP_ERR_NVS_NEW_VERSION_FOUND){
+    if (nvs_ret == ESP_ERR_NVS_NO_FREE_PAGES || nvs_ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
         nvs_flash_erase();
         nvs_ret = nvs_flash_init();
     }
+    
     s_wifi_event_group = xEventGroupCreate();
     esp_netif_init();
     esp_event_loop_create_default();
     esp_netif_create_default_wifi_sta();
+    
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     esp_wifi_init(&cfg);
     esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL);
@@ -63,6 +64,7 @@ void wifi_init_sta(void){
     wifi_config_t wifi_config = { 0 };
     strncpy((char*)wifi_config.sta.ssid, WIFI_SSID, sizeof(wifi_config.sta.ssid) - 1);
     strncpy((char*)wifi_config.sta.password, WIFI_PASSWORD, sizeof(wifi_config.sta.password) - 1);
+    
     esp_wifi_set_mode(WIFI_MODE_STA);
     esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
     esp_wifi_start();
@@ -74,7 +76,7 @@ void wifi_init_sta(void){
 // ============================================================================
 // WEBSOCKET
 // ============================================================================
-static void websocket_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data){
+static void websocket_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
     esp_websocket_event_data_t *data = (esp_websocket_event_data_t *)event_data;
     switch (event_id) {
         case WEBSOCKET_EVENT_CONNECTED:
@@ -94,7 +96,7 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
     }
 }
 
-void websocket_app_start(void){
+void websocket_app_start(void) {
     esp_websocket_client_config_t ws_cfg = {
         .uri = WEBSOCKET_URI,
         .crt_bundle_attach = esp_crt_bundle_attach, // Bat buoc cho wss://
@@ -109,8 +111,8 @@ void websocket_app_start(void){
 // ============================================================================
 // JSON & LOGIC
 // ============================================================================
-static int sp_convert_status_to_publish_scale(sleep_status_t raw){
-    switch(raw){
+static int sp_convert_status_to_publish_scale(sleep_status_t raw) {
+    switch(raw) {
         case SP_STATUS_OFF_BED:        return 1;
         case SP_STATUS_BODY_MOVEMENT:  return 2;
         case SP_STATUS_IN_BED:         return 4;
@@ -121,18 +123,17 @@ static int sp_convert_status_to_publish_scale(sleep_status_t raw){
     }
 }
 
-static long sp_get_unix_timestamp(void){
+// Ham lay thoi gian thuc Unix Epoch (Con so vi du: 1722243819)
+static long sp_get_unix_timestamp(void) {
     return (long)time(NULL);
 }
 
-// Ham nay da duoc viet lai cho WebSocket
-static void sp_publish_json(const char *topic, cJSON *root){
-    // Them topic vao JSON de server biet day la goi tin gi (sec hay min)
+static void sp_publish_json(const char *topic, cJSON *root) {
     cJSON_AddStringToObject(root, "topic", topic);
     
     char *payload = cJSON_PrintUnformatted(root);
-    if(payload){
-        if(s_ws_connected){
+    if(payload) {
+        if(s_ws_connected) {
             esp_websocket_client_send_text(s_ws_client, payload, strlen(payload), portMAX_DELAY);
             ESP_LOGI(TAG, "Send WS -> %s", payload);
         } else {
@@ -143,7 +144,7 @@ static void sp_publish_json(const char *topic, cJSON *root){
     cJSON_Delete(root);
 }
 
-void sp_data_process_task(void *pvParameter){
+void sp_data_process_task(void *pvParameter) {
     sleep_pad_data_second_report_t d;
     ESP_LOGI(TAG, "sp_data_process_task: da khoi dong (WebSocket Mode)");
 
@@ -161,14 +162,14 @@ void sp_data_process_task(void *pvParameter){
     int minute_last_status_raw = SP_STATUS_OFF_BED;
     int minute_last_pdata = 0;
 
-    while(1){
-        if(xQueueReceive(sp_data_queue_second_report, &d, portMAX_DELAY) == pdTRUE){
+    while(1) {
+        if(xQueueReceive(sp_data_queue_second_report, &d, portMAX_DELAY) == pdTRUE) {
             int pub_status = sp_convert_status_to_publish_scale(d.sleep_status);
 
-            // Payload giay
+            // 1. Tao va gui Payload Giay
             cJSON *sec = cJSON_CreateObject();
             cJSON_AddStringToObject(sec, "device_id", SLEEP_PAD_DEVICE_ID);
-            cJSON_AddNumberToObject(sec, "ts", sp_get_unix_timestamp());
+            cJSON_AddNumberToObject(sec, "ts", sp_get_unix_timestamp()); // Timestamp chuan nguyen
             cJSON_AddNumberToObject(sec, "status", pub_status);
             cJSON_AddNumberToObject(sec, "heart_rate", d.heart_rate);
             cJSON_AddNumberToObject(sec, "resp_rate", d.breathing_rate);
@@ -176,7 +177,7 @@ void sp_data_process_task(void *pvParameter){
             cJSON_AddNumberToObject(sec, "pdata", d.pdata);
             sp_publish_json(sec_topic, sec);
 
-            // Gop data phut
+            // 2. Tinh toan thong ke cho phut
             minute_sample_count++;
             if(d.sleep_status == SP_STATUS_BODY_MOVEMENT) minute_movement_count++;
             if(d.sleep_status == SP_STATUS_SNORING) minute_snore_count++;
@@ -186,10 +187,11 @@ void sp_data_process_task(void *pvParameter){
             minute_last_status_raw = d.sleep_status;
             minute_last_pdata = d.pdata;
 
-            if(minute_sample_count >= 60){
+            // 3. Gui Payload Phut neu du 60 mau
+            if(minute_sample_count >= 60) {
                 cJSON *min = cJSON_CreateObject();
                 cJSON_AddStringToObject(min, "device_id", SLEEP_PAD_DEVICE_ID);
-                cJSON_AddNumberToObject(min, "ts", sp_get_unix_timestamp());
+                cJSON_AddNumberToObject(min, "ts", sp_get_unix_timestamp()); // Timestamp chuan nguyen
                 cJSON_AddNumberToObject(min, "status", sp_convert_status_to_publish_scale((sleep_status_t)minute_last_status_raw));
                 cJSON_AddNumberToObject(min, "heart_rate", minute_last_heart_rate);
                 cJSON_AddNumberToObject(min, "resp_rate", minute_last_breathing_rate);
@@ -201,6 +203,7 @@ void sp_data_process_task(void *pvParameter){
                 
                 sp_publish_json(min_topic, min);
 
+                // Reset bo dem
                 minute_sample_count = 0;
                 minute_movement_count = 0;
                 minute_snore_count = 0;
