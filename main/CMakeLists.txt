@@ -5,13 +5,10 @@ idf_component_register(
         sleep_pad
         drivers
         config_parameter
+        ble
+        connect_wifi
+        mqtt_wifi
     PRIV_REQUIRES
-        esp_wifi
-        esp_event
-        esp_netif
         nvs_flash
-        mqtt
         json
-        driver
-        lwip
 )

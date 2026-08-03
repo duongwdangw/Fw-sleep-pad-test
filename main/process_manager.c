@@ -1,149 +1,17 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
-#include <freertos/queue.h>
-#include <freertos/event_groups.h>
 #include <esp_log.h>
-#include <esp_wifi.h>
-#include <esp_event.h>
-#include <esp_netif.h>
-#include <nvs_flash.h>
-#include <mqtt_client.h>
 #include <cJSON.h>
-#include <esp_crt_bundle.h>
-#include <esp_sntp.h>
 #include <string.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdlib.h>
 #include <time.h>
 
 #include "sleep_pad.h"
 #include "process_manager.h"
-#include "config_parameter.h"
+#include "ble.h"
+#include "mqtt_wifi.h"
 
 #define TAG "PROC_MGR"
 
-static EventGroupHandle_t s_wifi_event_group;
-#define WIFI_CONNECTED_BIT BIT0
-
-static esp_mqtt_client_handle_t s_mqtt_client = NULL;
-static bool s_mqtt_connected = false;
-
-// ============================================================================
-// WiFi
-// ============================================================================
-static void wifi_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        esp_wifi_connect();
-    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        ESP_LOGW(TAG, "WiFi mat ket noi, dang thu ket noi lai...");
-        xEventGroupClearBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
-        esp_wifi_connect();
-    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        ESP_LOGI(TAG, "WiFi da co IP.");
-        xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
-    }
-}
-
-void wifi_init_sta(void) {
-    esp_err_t nvs_ret = nvs_flash_init();
-    if (nvs_ret == ESP_ERR_NVS_NO_FREE_PAGES || nvs_ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        nvs_flash_erase();
-        nvs_flash_init();
-    }
-    s_wifi_event_group = xEventGroupCreate();
-    esp_netif_init();
-    esp_event_loop_create_default();
-    esp_netif_create_default_wifi_sta();
-
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    esp_wifi_init(&cfg);
-    esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL);
-    esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &wifi_event_handler, NULL, NULL);
-
-    wifi_config_t wifi_config = { 0 };
-    strncpy((char*)wifi_config.sta.ssid, WIFI_SSID, sizeof(wifi_config.sta.ssid) - 1);
-    strncpy((char*)wifi_config.sta.password, WIFI_PASSWORD, sizeof(wifi_config.sta.password) - 1);
-
-    esp_wifi_set_mode(WIFI_MODE_STA);
-    esp_wifi_set_config(WIFI_IF_STA, &wifi_config);
-    esp_wifi_start();
-    
-    ESP_LOGI(TAG, "Dang cho ket noi WiFi toi SSID '%s'...", WIFI_SSID);
-    xEventGroupWaitBits(s_wifi_event_group, WIFI_CONNECTED_BIT, pdFALSE, pdTRUE, portMAX_DELAY);
-    ESP_LOGI(TAG, "WiFi ket noi thanh cong.");
-}
-
-// ============================================================================
-// NTP TIME SYNC
-// ============================================================================
-void sync_time_from_ntp(void) {
-    ESP_LOGI(TAG, "Dang dong bo thoi gian thuc tu Internet...");
-    esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    esp_sntp_setservername(0, "pool.ntp.org");
-    esp_sntp_init();
-
-    time_t now = 0;
-    struct tm timeinfo = { 0 };
-    int retry = 0;
-    
-    while (timeinfo.tm_year < (2024 - 1900) && ++retry < 15) {
-        vTaskDelay(pdMS_TO_TICKS(2000));
-        time(&now);
-        localtime_r(&now, &timeinfo);
-    }
-    
-    setenv("TZ", "UTC-7", 1);
-    tzset();
-    
-    char strftime_buf[64];
-    strftime(strftime_buf, sizeof(strftime_buf), "%Y-%m-%d %H:%M:%S", &timeinfo);
-    ESP_LOGI(TAG, "Dong bo xong! Thoi gian hien tai: %s", strftime_buf);
-}
-
-// ============================================================================
-// MQTT
-// ============================================================================
-static void mqtt_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
-    switch ((esp_mqtt_event_id_t)event_id) {
-        case MQTT_EVENT_CONNECTED:
-            ESP_LOGI(TAG, "MQTT da ket noi toi broker.");
-            s_mqtt_connected = true;
-            break;
-        case MQTT_EVENT_DISCONNECTED:
-            ESP_LOGW(TAG, "MQTT mat ket noi.");
-            s_mqtt_connected = false;
-            break;
-        case MQTT_EVENT_ERROR:
-            ESP_LOGE(TAG, "MQTT loi ket noi/xac thuc. Kiem tra lai URI/Username/Password.");
-            break;
-        default:
-            break;
-    }
-}
-
-void mqtt_app_start(void) {
-    // Cau hinh toi uu chong nghen (Non-blocking) cho MQTT
-    esp_mqtt_client_config_t mqtt_cfg = {
-        .broker.address.uri = MQTT_BROKER_URI,
-        .broker.verification.crt_bundle_attach = esp_crt_bundle_attach,
-        .credentials.username = MQTT_USERNAME,
-        .credentials.authentication.password = MQTT_PASSWORD,
-        .network.reconnect_timeout_ms = 10000,
-        .network.timeout_ms = 10000,
-        .buffer.size = 2048,
-        .buffer.out_size = 2048
-    };
-
-    s_mqtt_client = esp_mqtt_client_init(&mqtt_cfg);
-    esp_mqtt_client_register_event(s_mqtt_client, ESP_EVENT_ANY_ID, mqtt_event_handler, NULL);
-    esp_mqtt_client_start(s_mqtt_client);
-    ESP_LOGI(TAG, "Dang ket noi MQTT toi %s ...", MQTT_BROKER_URI);
-}
-
-// ============================================================================
-// JSON & LOGIC
-// ============================================================================
 static int sp_convert_status_to_publish_scale(sleep_status_t raw) {
     switch(raw) {
         case SP_STATUS_OFF_BED:        return 1;
@@ -157,32 +25,41 @@ static int sp_convert_status_to_publish_scale(sleep_status_t raw) {
 }
 
 static long sp_get_unix_timestamp(void) {
-    return (long)time(NULL);
+    long current_time = (long)time(NULL);
+    // Nếu chưa có WiFi, current_time sẽ rất nhỏ. Cộng vào mốc ảo để luôn có 10 chữ số.
+    if (current_time < 1700000000) {
+        long mock_base_time = 1785317204; 
+        return mock_base_time + current_time; 
+    }
+    // Khi có WiFi, tự trả về giờ thực NTP chuẩn.
+    return current_time;
 }
 
 static void sp_publish_json(const char *topic, cJSON *root) {
     char *payload = cJSON_PrintUnformatted(root);
     if (payload) {
-        if (s_mqtt_connected) {
-            // QoS 0 giup ban tin gui di nhanh nhat, giam thieu tac nghen mang
-            esp_mqtt_client_publish(s_mqtt_client, topic, payload, 0, 0, 0);
-            ESP_LOGI(TAG, "Publish -> %s", payload);
+        // In ra màn hình giống hệt format gốc của bạn
+        ESP_LOGI(TAG, "Publish -> %s", payload);
+        
+        if (mqtt_connected) {
+            mqtt_publish_data(topic, payload);
         } else {
-            ESP_LOGW(TAG, "MQTT chua ket noi, bo qua du lieu de giai phong CPU.");
+            // Giữ lại dòng cảnh báo này để bạn biết nếu rớt mạng
+            ESP_LOGW(TAG, "MQTT chua ket noi, bo qua du lieu JSON.");
         }
         free(payload);
     }
     cJSON_Delete(root);
 }
-
 void sp_data_process_task(void *pvParameter) {
     sleep_pad_data_second_report_t d;
-    ESP_LOGI(TAG, "sp_data_process_task: da khoi dong (MQTT Mode)");
+    ESP_LOGI(TAG, "sp_data_process_task: da khoi dong");
 
+    const char* device_id = ble_get_device_id();
     char sec_topic[64];
     char min_topic[64];
-    snprintf(sec_topic, sizeof(sec_topic), "sleeppad/%s/sec", SLEEP_PAD_DEVICE_ID);
-    snprintf(min_topic, sizeof(min_topic), "sleeppad/%s/min", SLEEP_PAD_DEVICE_ID);
+    snprintf(sec_topic, sizeof(sec_topic), "sleeppad/%s/sec", device_id);
+    snprintf(min_topic, sizeof(min_topic), "sleeppad/%s/min", device_id);
 
     int minute_sample_count = 0;
     int minute_movement_count = 0;
@@ -197,9 +74,9 @@ void sp_data_process_task(void *pvParameter) {
         if (xQueueReceive(sp_data_queue_second_report, &d, portMAX_DELAY) == pdTRUE) {
             int pub_status = sp_convert_status_to_publish_scale(d.sleep_status);
 
-            // Payload Giay
+            // BẢN TIN GIÂY
             cJSON *sec = cJSON_CreateObject();
-            cJSON_AddStringToObject(sec, "device_id", SLEEP_PAD_DEVICE_ID);
+            cJSON_AddStringToObject(sec, "device_id", device_id);
             cJSON_AddNumberToObject(sec, "ts", sp_get_unix_timestamp());
             cJSON_AddNumberToObject(sec, "status", pub_status);
             cJSON_AddNumberToObject(sec, "heart_rate", d.heart_rate);
@@ -208,7 +85,7 @@ void sp_data_process_task(void *pvParameter) {
             cJSON_AddNumberToObject(sec, "pdata", d.pdata);
             sp_publish_json(sec_topic, sec);
 
-            // Thong ke Phut
+            // TÍCH LŨY DỮ LIỆU PHÚT
             minute_sample_count++;
             if (d.sleep_status == SP_STATUS_BODY_MOVEMENT) minute_movement_count++;
             if (d.sleep_status == SP_STATUS_SNORING) minute_snore_count++;
@@ -218,10 +95,10 @@ void sp_data_process_task(void *pvParameter) {
             minute_last_status_raw = d.sleep_status;
             minute_last_pdata = d.pdata;
 
+            // BẢN TIN PHÚT
             if (minute_sample_count >= 60) {
-                // Payload Phut
                 cJSON *min = cJSON_CreateObject();
-                cJSON_AddStringToObject(min, "device_id", SLEEP_PAD_DEVICE_ID);
+                cJSON_AddStringToObject(min, "device_id", device_id);
                 cJSON_AddNumberToObject(min, "ts", sp_get_unix_timestamp());
                 cJSON_AddNumberToObject(min, "status", sp_convert_status_to_publish_scale((sleep_status_t)minute_last_status_raw));
                 cJSON_AddNumberToObject(min, "heart_rate", minute_last_heart_rate);
@@ -234,6 +111,7 @@ void sp_data_process_task(void *pvParameter) {
                 
                 sp_publish_json(min_topic, min);
 
+                // Reset biến đếm sau mỗi phút
                 minute_sample_count = 0;
                 minute_movement_count = 0;
                 minute_snore_count = 0;
