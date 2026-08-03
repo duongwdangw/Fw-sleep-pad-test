@@ -308,9 +308,21 @@ static void handle_write_value(uint16_t handle, const uint8_t *value, uint16_t l
 {
     if (handle == s_handle_table[IDX_SSID_VAL]) {
         copy_ble_value(s_config.wifi_ssid, sizeof(s_config.wifi_ssid), value, len);
+        if(strstr(s_config.wifi_ssid, "skip") != NULL) {
+            ESP_LOGW(TAG, "Skip setup new wifi");
+            if (nvs_config_load(&s_config)) {
+                const char *device_id = ble_get_device_id();
+                ESP_LOGI(TAG, "Resuming with NVS creds (ssid=%s, scheme=%s, host=%s) device_id=%s",
+                        s_config.wifi_ssid, s_config.mqtt_scheme, s_config.mqtt_broker, device_id);
+                wifi_connect_sta(s_config.wifi_ssid, s_config.wifi_password);
+            } 
+        }
+        else{
         nvs_config_save(NVS_KEY_SSID, s_config.wifi_ssid);
         flag_data_written[0] = true;
         ESP_LOGI(TAG, "Received WiFi SSID: %s", s_config.wifi_ssid);
+        }
+
     } else if (handle == s_handle_table[IDX_PASS_VAL]) {
         copy_ble_value(s_config.wifi_password, sizeof(s_config.wifi_password), value, len);
         nvs_config_save(NVS_KEY_PASS, s_config.wifi_password);
@@ -503,17 +515,28 @@ void ble_init(void) {
         ESP_LOGI(TAG, "BLE already initialized");
         return;
     }
-
-    esp_err_t ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        ret = nvs_flash_init();
+    for (int i = 0; i < 6; i++) {
+        flag_data_written[i] = false;
     }
-    ESP_ERROR_CHECK(ret);
+    static bool s_nvs_done = false;
+    static bool s_classic_released = false;
+
+    if (!s_nvs_done) {
+        esp_err_t ret = nvs_flash_init();
+        if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+            ESP_ERROR_CHECK(nvs_flash_erase());
+            ret = nvs_flash_init();
+        }
+        ESP_ERROR_CHECK(ret);
+        s_nvs_done = true;
+    }
 
     derive_device_id();
 
-    ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
+    if (!s_classic_released) {
+        ESP_ERROR_CHECK(esp_bt_controller_mem_release(ESP_BT_MODE_CLASSIC_BT));
+        s_classic_released = true;
+    }
 
     esp_bt_controller_config_t bt_cfg = BT_CONTROLLER_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_bt_controller_init(&bt_cfg));
@@ -545,4 +568,21 @@ const char *ble_get_device_id(void)
 bool ble_is_active(void)
 {
     return s_ble_started;
+}
+
+// Dừng BLE - KHÔNG gọi mem_release
+void ble_stop(void) {
+    if (!ble_is_active()) return;
+
+    esp_ble_gap_stop_advertising();
+    vTaskDelay(pdMS_TO_TICKS(200));
+
+    esp_bluedroid_disable();
+    esp_bluedroid_deinit();
+
+    esp_bt_controller_disable();
+    esp_bt_controller_deinit();  // deinit thay vì mem_release
+
+    s_ble_started = false;
+    ESP_LOGI(TAG, "BLE stopped");
 }

@@ -83,8 +83,10 @@ void sp_data_process_task(void *pvParameter) {
             cJSON_AddNumberToObject(sec, "resp_rate", d.breathing_rate);
             cJSON_AddNumberToObject(sec, "sdata", d.sdata);
             cJSON_AddNumberToObject(sec, "pdata", d.pdata);
-            sp_publish_json(sec_topic, sec);
-
+            if(mqtt_connected)
+            {
+              sp_publish_json(sec_topic, sec);
+            }
             // TÍCH LŨY DỮ LIỆU PHÚT
             minute_sample_count++;
             if (d.sleep_status == SP_STATUS_BODY_MOVEMENT) minute_movement_count++;
@@ -108,9 +110,10 @@ void sp_data_process_task(void *pvParameter) {
                 cJSON_AddNumberToObject(min, "resp_disorder", minute_resp_disorder_count);
                 cJSON_AddNumberToObject(min, "pthd", minute_last_pdata);
                 cJSON_AddNumberToObject(min, "temp", 0.0);
-                
-                sp_publish_json(min_topic, min);
-
+                if(mqtt_connected)
+                {
+                    sp_publish_json(min_topic, min);
+                }
                 // Reset biến đếm sau mỗi phút
                 minute_sample_count = 0;
                 minute_movement_count = 0;

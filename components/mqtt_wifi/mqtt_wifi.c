@@ -290,4 +290,7 @@ void mqtt_init(const char *mqtt_address, const char *client_id, const char *user
         esp_mqtt_client_destroy(client);
         client = NULL;
     }
+    else {
+        ESP_LOGI(TAG, "MQTT client started successfully");
+    }
 }

@@ -106,13 +106,13 @@ static void sp_handle_bdata_result(const uint8_t *rx_buf, int tag_pos, int rx_le
     xQueueSend(sp_data_queue_second_report, &sp_data_second_report, 0);
 
     static const char *status_name[6] = {
-        "Dang nam tren giuong", "Da roi giuong", "Co cu dong",
-        "Tho yeu", "Vat nang - khong sinh hieu", "Dang ngay"
+        "Detect human in the bed", "Out of the bed", "Detect body movement",
+        "Weak breathing", "No human detected", "Detect snoring"
     };
     const char *name = (sp_data_second_report.sleep_status <= SP_STATUS_SNORING)
                         ? status_name[sp_data_second_report.sleep_status] : "Khong xac dinh";
 
-    ESP_LOGI(TAG, "[%s] Trang thai=%d | Nhip tim: %d BPM | Nhip tho: %.1f lan/phut | sdata=%d pdata=%d",
+    ESP_LOGI(TAG, "[%s] Trang thai=%d | Nhip tim: %d BPM | Nhip tho: %d lan/phut | sdata=%d pdata=%d",
              name,
              sp_data_second_report.sleep_status,
              sp_data_second_report.heart_rate,

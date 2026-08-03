@@ -8,6 +8,7 @@ idf_component_register(
         ble
         connect_wifi
         mqtt_wifi
+        config_gpio
     PRIV_REQUIRES
         nvs_flash
         json

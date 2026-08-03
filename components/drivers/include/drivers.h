@@ -4,4 +4,6 @@
 
 void uart_sleep_pad_init(void);
 
+void start_stop_ble_timer(void);
+
 #endif

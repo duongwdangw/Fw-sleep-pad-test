@@ -10,6 +10,7 @@
 #include "nvs_config.h"
 #include "drivers.h"
 #include "mqtt_wifi.h"
+#include "config_gpio.h"
 
 #define TAG "APP_MAIN"
 
@@ -24,17 +25,20 @@ void main_task(void *pvParameter) {
 
     ESP_LOGI(TAG, "Buoc 2: Kiem tra NVS...");
     // Load config truc tiep vao bien toan cuc s_config cua BLE
-    bool has_creds = nvs_config_load(&s_config);
+    // bool has_creds = nvs_config_load(&s_config);
 
     wifi_init();
 
-    if (has_creds) {
-        ESP_LOGI(TAG, "Da co thong tin, tien hanh ket noi WiFi: %s", s_config.wifi_ssid);
-        wifi_connect_sta(s_config.wifi_ssid, s_config.wifi_password);
-    } else {
-        ESP_LOGI(TAG, "Chua co WiFi. Bat BLE chờ điện thoại Provisioning...");
-        ble_init();
-    }
+    // if (has_creds) {
+    //     ESP_LOGI(TAG, "Da co thong tin, tien hanh ket noi WiFi: %s", s_config.wifi_ssid);
+    //     wifi_connect_sta(s_config.wifi_ssid, s_config.wifi_password);
+    // } else {
+    //     ESP_LOGI(TAG, "Chua co WiFi. Bat BLE chờ điện thoại Provisioning...");
+    //     ble_init();
+    //     start_stop_ble_timer();
+    // }
+    ble_init();
+    start_stop_ble_timer();
 
     ESP_LOGI(TAG, "Buoc 3: Khoi tao UART cho sleep pad...");
     uart_sleep_pad_init();
@@ -42,6 +46,7 @@ void main_task(void *pvParameter) {
     ESP_LOGI(TAG, "Buoc 4: Tao task doc UART va dong goi JSON...");
     xTaskCreate(sp_read_uart_data_task, "read_uart", 1024 * 5, NULL, 5, NULL);
     xTaskCreate(sp_data_process_task, "process_data", 1024 * 6, NULL, 5, NULL);
+    xTaskCreate(detect_mqtt_task, "detect_mqtt", 1024 * 6, NULL, 5, NULL);
 
     ESP_LOGI(TAG, "Buoc 5: Ổn định phần cứng (Warm-up)...");
     vTaskDelay(pdMS_TO_TICKS(3000)); // Đợi dòng điện ổn định, tránh nhảy pdata ảo
@@ -51,6 +56,7 @@ void main_task(void *pvParameter) {
     ESP_LOGI(TAG, "Buoc 6: Gui lenh [TAOSG] bat dau doc data...");
     sp_request_send_data_once_a_second();
 
+
     while(1) {
         vTaskDelay(pdMS_TO_TICKS(10000));
         ESP_LOGI(TAG, "main_task: van dang chay. MQTT Connected: %d", mqtt_connected);
@@ -58,5 +64,5 @@ void main_task(void *pvParameter) {
 }
 
 void app_main(void) {
-    xTaskCreate(main_task, "main_task", 1024 * 6, NULL, 10, NULL);
+    xTaskCreate(main_task, "main_task", 1024 * 16, NULL, 10, NULL);
 }

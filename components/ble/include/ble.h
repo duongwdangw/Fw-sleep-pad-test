@@ -53,4 +53,6 @@ bool ble_is_active(void);
  * value when no connection is active. */
 void ble_set_status(const char *status);
 
+void ble_stop(void);
+
 #endif

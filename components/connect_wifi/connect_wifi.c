@@ -84,7 +84,7 @@ static EventGroupHandle_t s_wifi_event_group;
 static const int WIFI_CONNECTED_BIT = BIT0;
 static bool s_connected = false;
 static int s_retry_num = 0;
-static bool got_ip = false;
+bool got_ip = false;
 /* Counts consecutive STA_DISCONNECTED events that occurred without ever
  * reaching IP_GOT_IP. Resets on first successful IP. After WIFI_FAIL_THRESHOLD
  * we tell the BLE-paired app the SSID/password are wrong rather than letting
@@ -196,6 +196,7 @@ void wifi_connect_sta(const char *ssid, const char *pass) // thử kết nối W
     wifi_config_t sta_conf = {0};
     strncpy((char *)sta_conf.sta.ssid, ssid, sizeof(sta_conf.sta.ssid) - 1);
     strncpy((char *)sta_conf.sta.password, pass, sizeof(sta_conf.sta.password) - 1);
+    // esp_wifi_init();
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
     esp_wifi_disconnect();
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &sta_conf));

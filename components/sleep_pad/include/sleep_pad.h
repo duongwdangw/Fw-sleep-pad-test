@@ -53,7 +53,7 @@ typedef struct{
     int time_stamp;
     sleep_status_t sleep_status;
     int heart_rate;
-    float breathing_rate;
+    int breathing_rate;
     int sdata;
     int pdata;
 }sleep_pad_data_second_report_t;
@@ -63,7 +63,7 @@ typedef struct{
     int time_stamp;
     sleep_status_t sleep_status;
     int heart_rate;
-    float breathing_rate;
+    int breathing_rate;
     int body_movement_count;
     int snoring_count;
     int respiratory_disorder_count;

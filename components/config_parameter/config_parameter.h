@@ -9,6 +9,9 @@
 #define SLEEP_PAD_TX_PIN 16
 #define SLEEP_PAD_RX_PIN 17
 
+#define WIFI_STATUS_LED_GPIO 2
+#define BUTTON_SETUP_WIFI_MODE 0
+
 // Define WiFi parameters
 #define WIFI_SSID "CHTLab"
 #define WIFI_PASSWORD "Coinhe2018"
